@@ -1,4 +1,4 @@
-import { getDeviceInfoByModelByte, getMacPrefix, type DeviceModel } from '../data/deviceModels';
+import { getMacPrefix, getAllDevicesByModelId, getAllDevicesByMacAddress, type DeviceModel } from '../data/deviceModels';
 
 export interface SupremaDeviceInfo {
   serialNumber: string;
@@ -8,6 +8,9 @@ export interface SupremaDeviceInfo {
   description: string;
   isValid: boolean;
   error?: string;
+  // Nuevos campos para manejar múltiples matches
+  possibleModels?: DeviceModel[];
+  hasMultipleMatches?: boolean;
 }
 
 export const parseSupremaSerial = (serialNumber: string): SupremaDeviceInfo => {
@@ -25,7 +28,6 @@ export const parseSupremaSerial = (serialNumber: string): SupremaDeviceInfo => {
     };
   }
 
-
   try {
     const deviceId = parseInt(cleanSerial, 10);
 
@@ -41,12 +43,13 @@ export const parseSupremaSerial = (serialNumber: string): SupremaDeviceInfo => {
       };
     }
 
-    const hexId = deviceId.toString(16).toUpperCase();
-    const last4Hex = hexId.slice(-4).padStart(4, '0');
+    // Buscar todos los dispositivos que coinciden con este Device ID
+    const possibleDevices = getAllDevicesByModelId(deviceId);
 
-    const deviceInfo = findDeviceBySerialPattern(cleanSerial, hexId);
-
-    if (!deviceInfo) {
+    if (possibleDevices.length === 0) {
+      const hexId = deviceId.toString(16).toUpperCase();
+      const last4Hex = hexId.slice(-4).padStart(4, '0');
+      
       return {
         serialNumber,
         macAddress: `Unknown-${last4Hex}`,
@@ -58,15 +61,29 @@ export const parseSupremaSerial = (serialNumber: string): SupremaDeviceInfo => {
       };
     }
 
-    const macAddress = `${getMacPrefix(deviceInfo)}-${last4Hex.substring(0, 2)}-${last4Hex.substring(2, 4)}`;
+    const hexId = deviceId.toString(16).toUpperCase();
+    const last4Hex = hexId.slice(-4).padStart(4, '0');
+
+    // Si hay múltiples matches, usamos el primero pero indicamos que hay más opciones
+    const primaryDevice = possibleDevices[0];
+    const macAddress = `${getMacPrefix(primaryDevice)}-${last4Hex.substring(0, 2)}-${last4Hex.substring(2, 4)}`;
+
+    const hasMultiple = possibleDevices.length > 1;
+    const modelText = hasMultiple 
+      ? `${primaryDevice.name} (and ${possibleDevices.length - 1} other possible model${possibleDevices.length > 2 ? 's' : ''})`
+      : primaryDevice.name;
 
     return {
       serialNumber,
       macAddress,
-      model: deviceInfo.name,
-      generation: deviceInfo.generation,
-      description: `${deviceInfo.name} - Generation ${deviceInfo.generation}`,
-      isValid: true
+      model: modelText,
+      generation: primaryDevice.generation,
+      description: hasMultiple 
+        ? `Multiple possible models found for this Device ID`
+        : `${primaryDevice.name} - Generation ${primaryDevice.generation}`,
+      isValid: true,
+      possibleModels: possibleDevices,
+      hasMultipleMatches: hasMultiple
     };
 
   } catch {
@@ -80,44 +97,6 @@ export const parseSupremaSerial = (serialNumber: string): SupremaDeviceInfo => {
       error: 'Failed to parse serial number'
     };
   }
-};
-
-const findDeviceBySerialPattern = (serial: string, hexId: string): DeviceModel | null => {
-
-  // Use the model byte from the hex conversion to determine device type
-  const last4Hex = hexId.slice(-4).padStart(4, '0');
-  const modelByte = last4Hex.substring(0, 2);
-
-  // Try to find device by model byte first
-  const device = getDeviceInfoByModelByte(modelByte);
-
-  if (device) {
-    return device;
-  }
-
-  // Fallback to serial number patterns for older devices
-  if (serial.startsWith('1') && serial.length >= 9) {
-    return getDeviceInfoByModelByte('47'); // BioStation A2 range
-  }
-
-  if (serial.startsWith('2') && serial.length >= 8) {
-    return getDeviceInfoByModelByte('50'); // BioStation T2 range
-  }
-
-  if (serial.startsWith('3') && serial.length >= 8) {
-    return getDeviceInfoByModelByte('80'); // FaceStation 2 range
-  }
-
-  if (serial.startsWith('4') && serial.length >= 8) {
-    return getDeviceInfoByModelByte('90'); // BioStation 2 range
-  }
-
-  if (serial.startsWith('5') && serial.length >= 8) {
-    return getDeviceInfoByModelByte('D0'); // XPass 2 range
-  }
-
-  // Default to X-Station for unknown patterns
-  return getDeviceInfoByModelByte('00');
 };
 
 export const parseMacAddress = (macAddress: string): SupremaDeviceInfo => {
@@ -135,8 +114,8 @@ export const parseMacAddress = (macAddress: string): SupremaDeviceInfo => {
     };
   }
 
-  // Check if it's a Suprema device (starts with 0017FC)
-  if (!cleanMac.startsWith('0017FC')) {
+  // Check if it's a Suprema device (starts with 0017FC or 0017FB)
+  if (!cleanMac.startsWith('0017FC') && !cleanMac.startsWith('0017FB')) {
     return {
       serialNumber: '',
       macAddress: macAddress,
@@ -144,64 +123,43 @@ export const parseMacAddress = (macAddress: string): SupremaDeviceInfo => {
       generation: 1,
       description: '',
       isValid: false,
-      error: 'This is not a Suprema device MAC address. Suprema devices start with 00:17:FC'
+      error: 'This is not a Suprema device MAC address. Suprema devices start with 00:17:FC or 00:17:FB'
     };
   }
 
   try {
-    const modelByte = cleanMac.substring(6, 8);
-    const lastFourHex = cleanMac.substring(8, 12); // Últimos 4 dígitos hex según documentación Suprema
-    
-    const partialDeviceId = parseInt(lastFourHex, 16);
-    const deviceInfo = getDeviceInfoByModelByte(modelByte);
+    // Buscar todos los dispositivos que coinciden con esta MAC
+    const possibleDevices = getAllDevicesByMacAddress(macAddress);
 
-    if (!deviceInfo) {
+    if (possibleDevices.length === 0) {
       return {
-        serialNumber: partialDeviceId.toString(),
+        serialNumber: 'Cannot determine from MAC',
         macAddress: formatMacFromClean(cleanMac),
         model: 'Unknown Model',
         generation: 1,
-        description: 'Device model not recognized',
+        description: 'Device model not recognized. Please use Device ID for identification.',
         isValid: false,
         error: 'Device model not found in database'
       };
     }
 
-    // Buscar el Device ID correcto usando patrones de datos reales
-    let reconstructedSerial = partialDeviceId; // fallback
-    
-    for (const range of deviceInfo.modelIdRange) {
-      const rangeStart = range.start;
-      const rangeEnd = range.end;
-      
-      // Para cada bloque de 65536 en el rango, verificar si el candidato está dentro
-      const firstBlockStart = Math.floor(rangeStart / 65536) * 65536;
-      const lastBlockStart = Math.floor(rangeEnd / 65536) * 65536;
-      
-      // Buscar en todos los bloques posibles
-      for (let blockStart = firstBlockStart; blockStart <= lastBlockStart; blockStart += 65536) {
-        const candidate = blockStart + partialDeviceId;
-        
-        // Verificar si el candidato está dentro del rango válido del modelo
-        if (candidate >= rangeStart && candidate <= rangeEnd) {
-          reconstructedSerial = candidate;
-          break;
-        }
-      }
-      
-      // Si encontramos una coincidencia válida, usar esa
-      if (reconstructedSerial !== partialDeviceId) {
-        break;
-      }
-    }
+    const hasMultiple = possibleDevices.length > 1;
+    const primaryDevice = possibleDevices[0];
+    const modelText = hasMultiple 
+      ? `${primaryDevice.name} (and ${possibleDevices.length - 1} other possible model${possibleDevices.length > 2 ? 's' : ''})`
+      : primaryDevice.name;
 
     return {
-      serialNumber: reconstructedSerial.toString(),
+      serialNumber: 'Use Device ID for exact identification',
       macAddress: formatMacFromClean(cleanMac),
-      model: deviceInfo.name,
-      generation: deviceInfo.generation,
-      description: `${deviceInfo.name} - Generation ${deviceInfo.generation}`,
-      isValid: true
+      model: modelText,
+      generation: primaryDevice.generation,
+      description: hasMultiple 
+        ? `Multiple possible models found. Use Device ID for exact identification.`
+        : `${primaryDevice.name} - Generation ${primaryDevice.generation} (Model detected by MAC prefix)`,
+      isValid: true,
+      possibleModels: possibleDevices,
+      hasMultipleMatches: hasMultiple
     };
 
   } catch {
@@ -258,7 +216,7 @@ export const parseInput = (input: string): SupremaDeviceInfo => {
         generation: 1,
         description: '',
         isValid: false,
-        error: 'Invalid input format. Please enter a valid Suprema serial number (9 digits) or MAC address (XX:XX:XX:XX:XX:XX)'
+        error: 'Invalid input format. Please enter a valid Device ID (9 digits) or MAC address (XX:XX:XX:XX:XX:XX). Device ID is recommended for exact identification.'
       };
   }
 };

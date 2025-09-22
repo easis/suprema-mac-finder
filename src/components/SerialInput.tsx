@@ -73,7 +73,7 @@ export const SerialInput: React.FC<SerialInputProps> = ({ onSearch, isLoading = 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="relative">
           <label htmlFor="device-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 transition-colors duration-300">
-            Device Serial Number or MAC Address
+            Device ID (Serial Number) - Recommended
           </label>
           <input
             id="device-input"
@@ -81,7 +81,7 @@ export const SerialInput: React.FC<SerialInputProps> = ({ onSearch, isLoading = 
             value={inputValue}
             onChange={handleInputChange}
             onKeyPress={handleKeyPress}
-            placeholder="Enter serial number (e.g., 541234567) or MAC address (e.g., 00:17:FC:47:AB:CD)"
+            placeholder="Enter Device ID (e.g., 544426672) or MAC Address (e.g., 00:17:FC:73:4A:B0)"
             className={`w-full px-4 py-3 border-2 rounded-lg text-lg font-mono transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-gray-900 dark:text-gray-100 ${
               !isValid && inputValue.trim()
                 ? 'border-red-500 bg-red-50 dark:bg-red-900/20 dark:border-red-400'
@@ -102,17 +102,17 @@ export const SerialInput: React.FC<SerialInputProps> = ({ onSearch, isLoading = 
                 inputType === 'serial'
                   ? 'bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300'
                   : inputType === 'mac'
-                  ? 'bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-300'
+                  ? 'bg-yellow-100 dark:bg-yellow-800 text-yellow-700 dark:text-yellow-300'
                   : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
               }`}
             >
-              {inputType === 'serial' ? 'Serial Number' : inputType === 'mac' ? 'MAC Address' : 'Unknown'}
+              {inputType === 'serial' ? 'Device ID ✓' : inputType === 'mac' ? 'MAC (Model Only)' : 'Unknown'}
             </div>
           )}
 
           {!isValid && inputValue.trim() && (
             <p className="mt-2 text-sm text-red-600 dark:text-red-400 animate-fade-in transition-colors duration-300">
-              Please enter a valid serial number (9 digits) or MAC address (XX:XX:XX:XX:XX:XX)
+              Please enter a valid Device ID (9 digits) or MAC address (XX:XX:XX:XX:XX:XX)
             </p>
           )}
         </div>
@@ -142,7 +142,8 @@ export const SerialInput: React.FC<SerialInputProps> = ({ onSearch, isLoading = 
 
       <div className="mt-4 text-center">
         <p className="text-sm text-gray-500 dark:text-gray-400 transition-colors duration-300">
-          Example: 541234567 or 00:17:FC:47:AB:CD
+          <strong>Recommended:</strong> Device ID (544426672) for exact identification<br/>
+          <span className="text-xs">MAC Address provides model info only</span>
         </p>
       </div>
     </div>

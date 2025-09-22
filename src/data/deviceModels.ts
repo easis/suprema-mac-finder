@@ -11,6 +11,9 @@ export interface DeviceModel {
   }[];
 }
 
+// Según tabla de referencia de Suprema
+// NO MODIFICAR
+// https://kb.supremainc.com/knowledge/doku.php?id=en:tc_appnote_searching_a_device_s_ip_and_mac_address_manually
 export const deviceModels: Record<string, DeviceModel> = {
   // 1st Gen
   biostation: {
@@ -129,7 +132,7 @@ export const deviceModels: Record<string, DeviceModel> = {
   bioentry_w2_odp: {
     name: "BioEntry W2 (ODP)",
     generation: 2,
-    macRange: [{ start: "00-17-FC-70-00-00", end: "00-17-FC-71-FF-FF" }], // Expandido para incluir 71
+    macRange: [{ start: "00-17-FC-6E-00-00", end: "00-17-FC-6F-00-00" }],
     modelIdRange: [{ start: 544_158_000, end: 544_207_999 }],
   },
 
